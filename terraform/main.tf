@@ -1,34 +1,41 @@
+
 # ─────────────────────────────────────────────
-# Data sources
+# Data source: Ubuntu 24.04 LTS AMI
 # ─────────────────────────────────────────────
-data "aws_ami" "amazon_linux" {
+
+data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
   }
 
-  # FIX: Explicitly pin architecture to x86_64.
-  # Without this, the latest AMI could resolve to an arm64 image,
-  # which fails to launch on t2.micro (x86_64 only).
   filter {
     name   = "architecture"
     values = ["x86_64"]
   }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
 }
 
 # ─────────────────────────────────────────────
-# Security group
+# Security Group
 # ─────────────────────────────────────────────
+
 resource "aws_security_group" "ansible_sg" {
   name_prefix = "ansible-sg-"
   description = "Security group for Ansible master and worker nodes"
 
-  # FIX: Restrict SSH to a known CIDR via variable instead of 0.0.0.0/0.
-  # Exposing port 22 to the internet is a critical security risk.
-  # Set var.allowed_ssh_cidr to your CI runner IP or your office IP.
   ingress {
     description = "SSH access"
     from_port   = 22
@@ -46,7 +53,7 @@ resource "aws_security_group" "ansible_sg" {
   }
 
   egress {
-    description = "Allow all outbound"
+    description = "Allow all outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -61,19 +68,21 @@ resource "aws_security_group" "ansible_sg" {
 }
 
 # ─────────────────────────────────────────────
-# Ansible master node
+# Ansible Master Node
 # ─────────────────────────────────────────────
+
 resource "aws_instance" "ansible_master" {
-  ami           = data.aws_ami.amazon_linux.id
-  instance_type = var.instance_type
-  key_name      = var.key_name
-
-  vpc_security_group_ids = [aws_security_group.ansible_sg.id]
-
-  # FIX: Explicitly assign a public IP.
-  # In non-default VPCs this is not automatic — without it,
-  # Ansible has no address to SSH into.
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.instance_type
+  key_name                    = var.key_name
+  vpc_security_group_ids      = [aws_security_group.ansible_sg.id]
   associate_public_ip_address = true
+
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+    encrypted   = true
+  }
 
   tags = {
     Name        = "ansible-master"
@@ -84,19 +93,23 @@ resource "aws_instance" "ansible_master" {
 }
 
 # ─────────────────────────────────────────────
-# Worker nodes
+# Worker Nodes
 # ─────────────────────────────────────────────
+
 resource "aws_instance" "worker_nodes" {
-  # FIX: Use a variable instead of hardcoded 4.
-  # Change worker count in terraform.tfvars without touching main.tf.
   count = var.worker_count
 
-  ami           = data.aws_ami.amazon_linux.id
-  instance_type = var.instance_type
-  key_name      = var.key_name
-
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.instance_type
+  key_name                    = var.key_name
   vpc_security_group_ids      = [aws_security_group.ansible_sg.id]
   associate_public_ip_address = true
+
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+    encrypted   = true
+  }
 
   tags = {
     Name        = "worker-${count.index + 1}"
