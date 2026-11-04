@@ -1,0 +1,210 @@
+
+name: Terraform + Ansible Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Provision and Configure Ubuntu EC2
+    runs-on: ubuntu-latest
+
+    env:
+      ANSIBLE_HOST_KEY_CHECKING: "False"
+      ANSIBLE_SSH_RETRIES: "5"
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+      # 1. Checkout
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. AWS Authentication
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      # 3. Install dependencies
+      - name: Install Ansible and dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ansible jq openssh-client curl
+
+      # 4. Configure SSH
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" \
+            | tr -d '\r' > ~/.ssh/devops-key.pem
+          chmod 600 ~/.ssh/devops-key.pem
+
+          ssh-keygen -y -f ~/.ssh/devops-key.pem > /dev/null
+
+          cat >> ~/.ssh/config <<EOF
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            IdentityFile ~/.ssh/devops-key.pem
+            ConnectTimeout 30
+            ServerAliveInterval 60
+          EOF
+
+          chmod 600 ~/.ssh/config
+
+      # 5. Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Format
+        working-directory: terraform
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve tfplan
+
+      # 6. Extract Terraform outputs
+      - name: Extract EC2 IP addresses
+        id: tf_outputs
+        working-directory: terraform
+        run: |
+          MASTER_IP=$(terraform output -raw ansible_master_public_ip)
+          WORKER_IPS=$(terraform output -json worker_public_ips)
+
+          if [[ -z "$MASTER_IP" || "$MASTER_IP" == "null" ]]; then
+            echo "ERROR: Ansible master IP not found."
+            exit 1
+          fi
+
+          echo "::add-mask::$MASTER_IP"
+
+          echo "master_ip=$MASTER_IP" >> "$GITHUB_OUTPUT"
+
+          echo "$WORKER_IPS" | jq -r '.[]' > workers.txt
+
+          while read -r IP; do
+            [[ -z "$IP" ]] || echo "::add-mask::$IP"
+          done < workers.txt
+
+          echo "Terraform outputs extracted successfully."
+
+      # 7. Wait for SSH
+      - name: Wait for Ubuntu EC2 SSH
+        run: |
+          MASTER_IP="${{ steps.tf_outputs.outputs.master_ip }}"
+
+          echo "Waiting for Ubuntu SSH..."
+
+          for i in $(seq 1 20); do
+            if ssh -i ~/.ssh/devops-key.pem \
+              -o ConnectTimeout=5 \
+              ubuntu@"$MASTER_IP" "echo SSH_OK" 2>/dev/null; then
+              echo "Ubuntu SSH is ready."
+              exit 0
+            fi
+
+            echo "Attempt $i/20 - retrying in 15 seconds..."
+            sleep 15
+          done
+
+          echo "ERROR: SSH connection failed."
+          exit 1
+
+      # 8. Build dynamic Ansible inventory
+      - name: Build Ansible inventory
+        working-directory: terraform
+        run: |
+          MASTER_IP="${{ steps.tf_outputs.outputs.master_ip }}"
+
+          mkdir -p ../ansible
+
+          {
+            echo "[master]"
+            echo "$MASTER_IP ansible_user=ubuntu"
+
+            echo ""
+            echo "[workers]"
+
+            i=1
+            while read -r IP; do
+              [[ -z "$IP" ]] && continue
+              echo "worker-$i ansible_host=$IP ansible_user=ubuntu"
+              i=$((i + 1))
+            done < workers.txt
+
+            echo ""
+            echo "[all:vars]"
+            echo "ansible_ssh_private_key_file=~/.ssh/devops-key.pem"
+            echo "ansible_python_interpreter=/usr/bin/python3"
+            echo "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'"
+          } > ../ansible/inventory.ini
+
+          echo "Ansible inventory generated successfully."
+
+      # 9. SSH connectivity test
+      - name: Ansible connectivity check
+        working-directory: ansible
+        run: |
+          ansible all -i inventory.ini -m ping
+
+      # 10. Execute Ansible playbook
+      - name: Run Ansible playbook
+        working-directory: ansible
+        run: |
+          ansible-playbook \
+            -i inventory.ini \
+            playbook.yml \
+            --diff \
+            -v
+
+      # 11. Application smoke test
+      - name: Smoke test - Nginx
+        run: |
+          MASTER_IP="${{ steps.tf_outputs.outputs.master_ip }}"
+
+          echo "Checking Nginx HTTP response..."
+
+          for i in $(seq 1 5); do
+            HTTP_CODE=$(curl -s -o /dev/null \
+              -w "%{http_code}" \
+              --max-time 10 \
+              "http://$MASTER_IP" || true)
+
+            if [[ "$HTTP_CODE" == "200" ]]; then
+              echo "SUCCESS: Nginx returned HTTP 200."
+              exit 0
+            fi
+
+            echo "Attempt $i/5 - HTTP $HTTP_CODE"
+            sleep 10
+          done
+
+          echo "ERROR: Nginx smoke test failed."
+          exit 1
