@@ -1,0 +1,20 @@
+---
+- name: Install and configure PostgreSQL
+  hosts: all
+  become: true
+  tasks:
+    - name: Install PostgreSQL
+      package:
+        name: postgresql-server
+        state: present
+
+    - name: Initialize PostgreSQL database
+      command: postgresql-setup --initdb
+      args:
+        creates: /var/lib/pgsql/data/postgresql.conf
+
+    - name: Start and enable PostgreSQL
+      service:
+        name: postgresql
+        state: started
+        enabled: true

@@ -1,0 +1,26 @@
+---
+- name: Install and configure Jenkins
+  hosts: all
+  become: true
+  tasks:
+    - name: Add Jenkins repository
+      yum_repository:
+        name: jenkins
+        description: Jenkins stable repo
+        baseurl: https://pkg.jenkins.io/redhat-stable
+        gpgcheck: yes
+        gpgkey: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+        enabled: yes
+
+    - name: Install Java and Jenkins
+      package:
+        name:
+          - java-11-openjdk
+          - jenkins
+        state: present
+
+    - name: Start and enable Jenkins
+      service:
+        name: jenkins
+        state: started
+        enabled: true

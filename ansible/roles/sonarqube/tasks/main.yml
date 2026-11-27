@@ -1,0 +1,40 @@
+---
+- name: Install and configure SonarQube
+  hosts: all
+  become: true
+  tasks:
+    - name: Install required packages for SonarQube
+      package:
+        name:
+          - java-11-openjdk
+          - unzip
+        state: present
+
+    - name: Create sonarqube user
+      user:
+        name: sonarqube
+        system: yes
+        shell: /bin/bash
+        home: /opt/sonarqube
+
+    - name: Download and extract SonarQube
+      unarchive:
+        src: https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-9.9.0.65466.zip
+        dest: /opt/
+        remote_src: yes
+        creates: /opt/sonarqube-9.9.0.65466
+
+    - name: Set ownership
+      file:
+        path: /opt/sonarqube-9.9.0.65466
+        owner: sonarqube
+        group: sonarqube
+        recurse: yes
+
+    - name: Start SonarQube (as sonarqube user)
+      command: /opt/sonarqube-9.9.0.65466/bin/linux-x86-64/StartSonar.sh
+      args:
+        chdir: /opt/sonarqube-9.9.0.65466
+      become_user: sonarqube
+      async: 300
+      poll: 0
