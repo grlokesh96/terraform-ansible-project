@@ -35,7 +35,7 @@ jobs:
       # STAGE 1: Checkout & Environment Setup
       # ─────────────────────────────────────────────────────────────
       - name: "Stage 1.1: Checkout repository"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: "Stage 1.2: Configure AWS credentials"
         uses: aws-actions/configure-aws-credentials@v5
@@ -128,7 +128,7 @@ jobs:
       # STAGE 1: Environment Preparation
       # ─────────────────────────────────────────────────────────────
       - name: "Stage 1.1: Checkout repository"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: "Stage 1.2: Install Ansible"
         run: |
