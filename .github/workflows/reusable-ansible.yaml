@@ -1,0 +1,41 @@
+name: Reusable Ansible Workflow (Enterprise)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      inventory_path:
+        required: true
+        type: string
+    secrets:
+      SSH_PRIVATE_KEY:
+        required: true
+
+jobs:
+  ansible:
+    name: "Ansible - ${{ inputs.environment }}"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ansible jq
+          pip install ansible-core --quiet
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/key.pem
+          chmod 600 ~/.ssh/key.pem
+
+      - name: Run Ansible Playbook
+        working-directory: ansible
+        run: |
+          ansible-playbook \
+            -i ${{ inputs.inventory_path }} \
+            playbook.yml --diff -v

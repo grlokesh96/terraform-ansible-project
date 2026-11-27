@@ -1,0 +1,79 @@
+name: Reusable Terraform Workflow (Enterprise)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      working_directory:
+        required: true
+        type: string
+      aws_region:
+        required: false
+        type: string
+        default: "us-east-1"
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+
+jobs:
+  terraform:
+    name: "Terraform - ${{ inputs.environment }}"
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ${{ inputs.working_directory }}
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: ${{ inputs.working_directory }}
+        run: terraform validate
+
+      - name: TFLint + Checkov
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          tflint --init && tflint --recursive
+          pip install checkov --quiet
+          checkov -d . --framework terraform --compact || true
+
+      - name: Terraform Plan
+        working-directory: ${{ inputs.working_directory }}
+        run: terraform plan -out=tfplan
+
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: ${{ inputs.working_directory }}/tfplan
+          retention-days: 90
+
+      - name: Infracost (Cost Estimation)
+        uses: infracost/actions/setup@v2
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY || '' }}
+      - name: Run Infracost
+        if: ${{ secrets.INFRACOST_API_KEY != '' }}
+        run: |
+          infracost breakdown --path=${{ inputs.working_directory }} \
+            --format=json --out-file=/tmp/infracost.json || true
+          infracost comment github --path=/tmp/infracost.json \
+            --github-token=${{ github.token }} || true
