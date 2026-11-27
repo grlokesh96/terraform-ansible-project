@@ -1,0 +1,62 @@
+name: Enterprise Main Deployment Pipeline
+
+on:
+  push:
+    branches: [main, 'release/**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: enterprise-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+  security-events: write
+
+jobs:
+  security:
+    uses: ./.github/workflows/reusable-security-scan.yaml
+    with:
+      working_directory: "."
+
+  terraform-dev:
+    needs: security
+    uses: ./.github/workflows/reusable-terraform.yaml
+    with:
+      environment: "dev"
+      working_directory: "environments/dev"
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_DEV }}
+
+  terraform-staging:
+    needs: [security, terraform-dev]
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/reusable-terraform.yaml
+    with:
+      environment: "staging"
+      working_directory: "environments/staging"
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+
+  terraform-prod:
+    needs: [security, terraform-staging]
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/reusable-terraform.yaml
+    with:
+      environment: "prod"
+      working_directory: "environments/prod"
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_PROD }}
+
+  ansible:
+    needs: [terraform-dev, terraform-staging]
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/reusable-ansible.yaml
+    with:
+      environment: "dev"
+      inventory_path: "ansible/inventory.ini"
+    secrets:
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
