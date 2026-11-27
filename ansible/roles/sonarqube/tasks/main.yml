@@ -1,0 +1,68 @@
+---
+- name: Install required packages
+  apt:
+    name:
+      - openjdk-11-jdk
+      - unzip
+      - wget
+    state: present
+    update_cache: yes
+
+- name: Create sonarqube system user
+  user:
+    name: sonarqube
+    system: yes
+    shell: /bin/bash
+    home: /opt/sonarqube
+    create_home: no
+
+- name: Download SonarQube
+  get_url:
+    url: https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-9.9.8.100196.zip
+    dest: /tmp/sonarqube.zip
+    mode: '0644'
+
+- name: Extract SonarQube
+  unarchive:
+    src: /tmp/sonarqube.zip
+    dest: /opt/
+    remote_src: yes
+    creates: /opt/sonarqube-9.9.8.100196
+
+- name: Set ownership on SonarQube directory
+  file:
+    path: /opt/sonarqube-9.9.8.100196
+    owner: sonarqube
+    group: sonarqube
+    recurse: yes
+
+- name: Create systemd service for SonarQube
+  copy:
+    dest: /etc/systemd/system/sonarqube.service
+    content: |
+      [Unit]
+      Description=SonarQube service
+      After=network.target
+
+      [Service]
+      Type=forking
+      ExecStart=/opt/sonarqube-9.9.8.100196/bin/linux-x86-64/StartSonar.sh
+      User=sonarqube
+      Group=sonarqube
+      Restart=always
+      LimitNOFILE=65536
+      LimitNPROC=4096
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start SonarQube
+  service:
+    name: sonarqube
+    state: started
+    enabled: true
