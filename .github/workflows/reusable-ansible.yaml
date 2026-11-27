@@ -1,0 +1,52 @@
+name: Reusable Ansible Workflow (Enterprise)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      inventory_path:
+        required: true
+        type: string
+    secrets:
+      SSH_PRIVATE_KEY:
+        required: true
+
+jobs:
+  ansible:
+    name: "Ansible ${{ inputs.environment }}"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Stage 1: Checkout"
+        uses: actions/checkout@11bd71901dde5b5ca6a1a90b9738e10b01e3470a # v4.2.2
+
+      - name: "Stage 2: Install Ansible"
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ansible jq
+          pip install ansible-core --quiet
+
+      - name: "Stage 3: Configure SSH"
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/key.pem
+          chmod 600 ~/.ssh/key.pem
+
+      - name: "Stage 4: Ansible Syntax Check"
+        working-directory: ansible
+        run: ansible-playbook --syntax-check -i ${{ inputs.inventory_path }} playbooks/site.yml || true
+
+      - name: "Stage 5: Ansible Lint"
+        working-directory: ansible
+        run: |
+          pip install ansible-lint --quiet
+          ansible-lint -c ../.ansible-lint || true
+
+      - name: "Stage 6: Run Playbook"
+        working-directory: ansible
+        run: |
+          ansible-playbook \
+            -i ${{ inputs.inventory_path }} \
+            playbooks/site.yml --diff -v

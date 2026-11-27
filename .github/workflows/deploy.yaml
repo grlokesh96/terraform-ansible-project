@@ -1,0 +1,46 @@
+name: Enterprise Main Deployment Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+  security-events: write
+
+jobs:
+  security:
+    name: "1. Security & Secret Scanning"
+    uses: ./.github/workflows/reusable-security-scan.yaml
+    with:
+      working_directory: "."
+
+  terraform-plan:
+    name: "2. Terraform Plan & Validation"
+    needs: security
+    uses: ./.github/workflows/reusable-terraform.yaml
+    with:
+      environment: "dev"
+      working_directory: "environments/dev"
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN_DEV }}
+
+  ansible:
+    name: "3. Ansible Deployment"
+    needs: [security, terraform-plan]
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/reusable-ansible.yaml
+    with:
+      environment: "dev"
+      inventory_path: "ansible/inventories/dev/hosts.ini"
+    secrets:
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}

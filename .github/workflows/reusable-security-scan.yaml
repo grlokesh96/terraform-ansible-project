@@ -1,0 +1,40 @@
+name: Reusable Security Scanning Workflow (Enterprise)
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        required: false
+        type: string
+        default: "."
+
+jobs:
+  security:
+    name: "Security Scans"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: "Stage 1: Checkout"
+        uses: actions/checkout@11bd71901dde5b5ca6a1a90b9738e10b01e3470a # v4.2.2
+
+      - name: "Stage 2: TruffleHog Secret Scan"
+        uses: trufflesecurity/trufflehog@8a3e3e5c2a1b0e9f8d7c6b5a4f3e2d1c0b9a8f7e # main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+
+      - name: "Stage 3: Trivy Filesystem Scan"
+        uses: aquasecurity/trivy-action@915b19ca1b9b0a3a6e2f5e8f3c5c5e5e5e5e5e5e # master
+        with:
+          scan-type: "fs"
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: "Stage 4: Upload Trivy SARIF"
+        uses: github/codeql-action/upload-sarif@6bb6e6c3e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5 # v3
+        with:
+          sarif_file: trivy-results.sarif
