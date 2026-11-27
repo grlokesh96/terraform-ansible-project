@@ -1,119 +1,137 @@
-# Terraform + Ansible + GitHub Actions Project
+# Terraform + Ansible Enterprise IaC Platform
 
-## Objective
-Provision infrastructure using Terraform:
-- 1 Ansible Master EC2
-- 4 Worker EC2 Instances
+[![Terraform](https://img.shields.io/badge/Terraform-1.9+-623CE4?logo=terraform)](https://www.terraform.io/)
+[![Ansible](https://img.shields.io/badge/Ansible-2.15+-EE0000?logo=ansible)](https://www.ansible.com/)
+[![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazon-aws)](https://aws.amazon.com/)
+[![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI/CD-2088FF?logo=github-actions)](https://github.com/features/actions)
 
-Configure servers using Ansible:
-- Install Nginx
-- Install Python3
-- Enable Nginx Service
+Enterprise-grade Infrastructure as Code platform using Terraform, Ansible, AWS, and GitHub Actions with full DevSecOps integration.
 
-Automate everything using GitHub Actions.
+---
 
-## Workflow
+## Project Overview
+
+This repository provides a production-ready, secure, and maintainable platform for provisioning and configuring AWS infrastructure using Terraform and Ansible, orchestrated through GitHub Actions with comprehensive security, cost governance, and multi-environment support.
+
+## Architecture Overview
+
+```mermaid
+flowchart TD
+    A[Developer Push / PR] --> B[GitHub Actions]
+    B --> C[Security Scans]
+    C --> D[Reusable Workflows]
+    D --> E[Terraform]
+    D --> F[Ansible]
+    E --> G[AWS Infrastructure]
+    F --> G
+    G --> H[Health Checks]
+    H --> I[Deployment Summary]
 ```
-Developer Push
-    ↓
-GitHub Actions
-    ↓
-Terraform Apply
-    ↓
-AWS EC2 Creation
-    ↓
-Dynamic Inventory Generation
-    ↓
-Ansible Playbook Execution
-    ↓
-Nginx + Python Installed
+
+## Technology Stack
+
+| Layer | Technology |
+|-------|------------|
+| Infrastructure Provisioning | Terraform |
+| Configuration Management | Ansible |
+| Cloud Provider | AWS (EC2) |
+| CI/CD | GitHub Actions |
+| Security | TruffleHog, Checkov, TFLint, Trivy, OPA |
+| Cost Governance | Infracost |
+| State Management | AWS S3 + DynamoDB |
+
+## Enterprise Features
+
+- **Reusable Workflows** — DRY CI/CD with `workflow_call`
+- **Multi-Environment** — Isolated dev / staging / prod
+- **DevSecOps** — Full security scanning pipeline
+- **Cost Control** — Infracost on every PR
+- **OIDC Authentication** — No long-lived AWS credentials
+- **Professional Documentation** — Enterprise-grade README
+
+## Repository Structure
+
+```
+terraform-ansible-project/
+├── .github/
+│   ├── workflows/
+│   │   ├── deploy.yaml
+│   │   ├── reusable-terraform.yaml
+│   │   ├── reusable-ansible.yaml
+│   │   └── reusable-security-scan.yaml
+│   ├── CODEOWNERS
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── dependabot.yml
+├── environments/
+│   ├── dev/
+│   ├── staging/
+│   └── prod/
+├── terraform/
+│   ├── modules/
+│   └── shared/
+├── ansible/
+│   ├── inventories/
+│   ├── playbooks/
+│   ├── roles/
+│   └── molecule/
+├── policies/
+│   └── opa/
+├── scripts/
+├── docs/
+├── README.md
+├── .gitignore
+├── .trivyignore
+├── .tflint.hcl
+├── .checkov.yaml
+├── .ansible-lint
+└── infracost.yml
 ```
 
-## Tools Used
-- AWS EC2
-- Terraform
-- Ansible
-- GitHub Actions
-- Linux
-- SSH
+## Multi-Environment Strategy
+
+| Environment | Deployment Trigger | Approval Required |
+|-------------|--------------------|-------------------|
+| `dev` | Automatic on merge to main | No |
+| `staging` | After successful dev deployment | No |
+| `prod` | Manual approval + reviewed plan | Yes |
 
 ## Prerequisites
+
 - AWS Account with appropriate IAM permissions
-- GitHub repository secrets configured (see below)
-- Terraform >= 1.0
-- Ansible >= 2.9
+- GitHub repository with Actions enabled
+- Terraform ≥ 1.9
+- Ansible ≥ 2.15
 
 ## GitHub Secrets Required
-Configure the following secrets in your GitHub repository (`Settings` → `Secrets and variables` → `Actions`):
 
 | Secret | Description |
 |--------|-------------|
-| `AWS_ACCESS_KEY_ID` | AWS access key for Terraform |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key for Terraform |
-| `SSH_PRIVATE_KEY` | Private SSH key for EC2 access (PEM format) |
+| `AWS_ROLE_ARN_DEV` | OIDC role ARN for dev |
+| `AWS_ROLE_ARN_STAGING` | OIDC role ARN for staging |
+| `AWS_ROLE_ARN_PROD` | OIDC role ARN for prod |
+| `SSH_PRIVATE_KEY` | EC2 SSH private key |
 
-## Deployment
+## Quick Start
 
-### Local Development
 ```bash
-git clone <repo>
+git clone https://github.com/grlokesh96/terraform-ansible-project.git
 cd terraform-ansible-project
 
-# Terraform
-cd terraform
+# Review and apply Terraform
+cd environments/dev
 terraform init
+terraform plan
 terraform apply
 
-# Verify with Ansible
-cd ../ansible
-ansible all -m ping
-ansible-playbook playbook.yml
+# Run Ansible
+cd ../../../ansible
+ansible-playbook -i inventories/dev playbook.yml
 ```
 
-### CI/CD Pipeline
-The GitHub Actions workflow automatically:
-1. Runs on push to `main` branch
-2. Validates and applies Terraform
-3. Generates dynamic Ansible inventory
-4. Executes Ansible playbook
-5. Performs smoke tests
+## License
 
-Access the deployed application:
-```
-http://<master-public-ip>
-```
-You should see the Nginx welcome page.
+This project is licensed under the MIT License.
 
-## Project Structure
-```
-.
-├── .github/workflows/
-│   └── terraform-ansible.yaml    # CI/CD pipeline
-├── ansible/
-│   ├── ansible.cfg
-│   ├── inventory.ini             # Generated dynamically
-│   └── playbook.yml
-├── terraform/
-│   ├── main.tf
-│   ├── outputs.tf
-│   ├── provider.tf
-│   ├── terraform.tfvars
-│   └── variables.tf
-└── README.md
-```
+---
 
-## Best Practices Implemented
-- ✅ Secrets managed via GitHub Actions (never hardcoded)
-- ✅ SSH keys handled securely with proper permissions
-- ✅ Terraform state management via remote backend (recommended)
-- ✅ Idempotent Ansible playbooks
-- ✅ Concurrency control to prevent race conditions
-- ✅ Artifact upload for Terraform plans
-- ✅ Comprehensive error handling and retries
-- ✅ Smoke tests for deployment validation
-
-## Security Notes
-- Never commit AWS credentials or SSH keys to the repository
-- Use least-privilege IAM policies for CI/CD
-- Enable GitHub branch protection rules
-- Consider using OIDC for AWS authentication instead of long-lived keys
+*Enterprise-grade Infrastructure as Code platform — Secure • Scalable • Maintainable*
