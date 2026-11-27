@@ -1,20 +1,12 @@
 ---
-- name: Install and configure PostgreSQL
-  hosts: all
-  become: true
-  tasks:
-    - name: Install PostgreSQL
-      package:
-        name: postgresql-server
-        state: present
+- name: Install PostgreSQL
+  apt:
+    name: postgresql
+    state: present
+    update_cache: yes
 
-    - name: Initialize PostgreSQL database
-      command: postgresql-setup --initdb
-      args:
-        creates: /var/lib/pgsql/data/postgresql.conf
-
-    - name: Start and enable PostgreSQL
-      service:
-        name: postgresql
-        state: started
-        enabled: true
+- name: Start and enable PostgreSQL
+  service:
+    name: postgresql
+    state: started
+    enabled: true
