@@ -1,0 +1,17 @@
+# CODEOWNERS - Enterprise IaC Platform
+
+# Global owners for the entire repository
+* @grlokesh96
+
+# Terraform infrastructure changes require platform team review
+/terraform/ @grlokesh96
+/environments/ @grlokesh96
+
+# CI/CD and security workflows require DevSecOps review
+/.github/workflows/ @grlokesh96
+
+# Ansible configuration changes
+/ansible/ @grlokesh96
+
+# Security policies and configurations
+/policies/ @grlokesh96

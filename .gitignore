@@ -1,0 +1,42 @@
+# Terraform
+**/.terraform/**
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Ansible
+*.retry
+ansible/*.log
+ansible/inventory.ini
+
+# Environment & Secrets
+.env
+.env.*
+*.pem
+*.key
+secrets/
+vault/
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Logs & Reports
+*.log
+reports/
+infracost.json
+trivy-results.sarif
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
