@@ -8,7 +8,7 @@ terraform {
       # FIX: ~> 6.0 does not exist. Current stable major is 5.x.
       # Using ~> 5.0 allows any 5.x patch/minor update but blocks 6.x
       # until you explicitly upgrade and test breaking changes.
-      version = "~> 5.0"
+      version = "~> 6.74"
     }
   }
 
