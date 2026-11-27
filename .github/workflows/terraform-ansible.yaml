@@ -9,10 +9,11 @@ on:
 
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   deploy:
@@ -85,6 +86,12 @@ jobs:
       - name: Terraform Plan
         working-directory: terraform
         run: terraform plan -out=tfplan
+
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: terraform/tfplan
 
       - name: Terraform Apply
         working-directory: terraform
