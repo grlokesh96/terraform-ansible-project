@@ -1,0 +1,11 @@
+version: "1"
+rules:
+  - ansible-lint
+  - yaml
+  - shell
+  - no-log-password
+  - no-tabs
+  - risky-shell-pipe
+skip_list:
+  - "204" # bare variables
+  - "306" # risky-file-permissions

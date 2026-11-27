@@ -1,0 +1,8 @@
+---
+checks:
+  - CKV_AWS_1
+  - CKV_AWS_2
+  - CKV_AWS_20
+skip_check:
+  - CKV_AWS_79 # example: allow public read on S3 if justified
+framework: terraform
